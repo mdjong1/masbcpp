@@ -39,7 +39,7 @@ set(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} ${COMPILE_OPTIONS}")
 set_property(GLOBAL PROPERTY LINKER_LANGUAGE CXX)
 
 # include directories
-include_directories(thirdparty thirdparty/vrui)
+include_directories(thirdparty thirdparty/vrui thirdparty/zlib)
 
 # bundle all thirdparty stuff as a static library
 FILE(GLOB_RECURSE THIRDPARTY thirdparty/kdtree2/*.cpp thirdparty/vrui/*.cpp)
