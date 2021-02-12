@@ -41,6 +41,7 @@ SOFTWARE.
 
 // typedefs
 #include "compute_ma_processing.h"
+#include "full_process.h"
 
 
 
@@ -235,6 +236,171 @@ void compute_masb_points(ma_parameters &input_parameters, ma_data &madata)
    // Free memory
    delete madata.kdtree_coords; madata.kdtree_coords = NULL;
 }
+
+ma_result sb_point(full_parameters &input_parameters, Point &p, Vector &n, kdtree2::KDTree* kd_tree)
+{
+    unsigned int j = 0;
+    Scalar r, r_previous = 0;
+    Point q, c_next;
+    int qidx = -1, qidx_next;
+    Point c = p - n * input_parameters.initial_radius;
+
+    while (1)
+    {
+// #ifdef VERBOSEPRINT
+//       std::cout << "\nloop iteration: " << j << ", p = (" << p[0] << "," << p[1] << "," << p[2] << ", n = (" << n[0] << "," << n[1] << "," << n[2] << ") \n";
+
+//       std::cout << "c = (" << c[0] << "," << c[1] << "," << c[2] << ")\n";
+// #endif
+
+        // find closest point to c
+        kdtree2::KDTreeResultVector result;
+        kd_tree->n_nearest(c, 2, result);
+
+        qidx_next = result[0].idx;
+        q = kd_tree->the_data[qidx_next];
+
+// #ifdef VERBOSEPRINT
+//       std::cout << "q = (" << q[0] << "," << q[1] << "," << q[2] << ")\n";
+// #endif
+
+        // handle case when q==p
+        if (q == p)
+        {
+            // 1) if r_previous==SuperR, apparantly no other points on the halfspace spanned by -n => that's an infinite ball
+            if (r_previous == input_parameters.initial_radius)
+            {
+                r = input_parameters.initial_radius;
+                c = input_parameters.nan_for_initr ? nanPoint : p - n * r;
+                break;
+                // 2) otherwise just pick the second closest point
+            }
+            else {
+                qidx_next = result[1].idx;
+                q = kd_tree->the_data[qidx_next];
+            }
+        }
+
+        // compute radius
+        r = compute_radius(p, n, q);
+
+// #ifdef VERBOSEPRINT
+//       std::cout << "r = " << r << "\n";
+// #endif
+
+        // if r < 0 closest point was on the wrong side of plane with normal n => start over with SuperRadius on the right side of that plane
+        if (r < 0)
+            r = input_parameters.initial_radius;
+            // if r > SuperR, stop now because otherwise in case of planar surface point configuration, we end up in an infinite loop
+        else if (r > input_parameters.initial_radius)
+        {
+            r = input_parameters.initial_radius;
+            c = input_parameters.nan_for_initr ? nanPoint : p - n * r;
+            break;
+        }
+
+        // compute next ball center
+        c_next = p - n * r;
+
+        // denoising
+        if (input_parameters.denoise_preserve || input_parameters.denoise_planar)
+        {
+            Scalar a = cos_angle(p - c_next, q - c_next);
+            Scalar separation_angle = Vrui::Math::acos(a);
+
+            if (input_parameters.denoise_preserve && (separation_angle < input_parameters.denoise_preserve && j>0 && r > Vrui::Geometry::mag(q - p)))
+            {
+                // keep previous radius:
+                r = r_previous;
+                // qidx = qidx_next;
+                break;
+            }
+            if (input_parameters.denoise_planar && (separation_angle < input_parameters.denoise_planar && j == 0))
+            {
+                r = input_parameters.initial_radius;
+                c = input_parameters.nan_for_initr ? nanPoint : p - n * r;
+                // qidx = qidx_next;
+                break;
+            }
+        }
+
+        // stop iteration if r has converged
+        if (Vrui::Math::abs(r_previous - r) < delta_convergance)
+            break;
+
+        // stop iteration if this looks like an infinite loop:
+        if (j > iteration_limit)
+            break;
+
+        r_previous = r;
+        c = c_next;
+        qidx = qidx_next;
+        j++;
+    }
+
+    return{ c, qidx };
+}
+
+void sb_points(full_parameters &input_parameters, ma_data &madata, bool inner = 1)
+{
+    Point p;
+    Vector n;
+
+    // outer mat should be written to second half of ma_coords/ma_qidx
+    unsigned int offset = 0;
+    if (inner == false)
+        offset = madata.m;
+
+#pragma omp parallel for private(p, n)
+    for (int i = 0; i < madata.coords->size(); i++)
+    {
+        p = (*madata.coords)[i];
+        if (inner)
+            n = (*madata.normals)[i];
+        else
+            n = -(*madata.normals)[i];
+        ma_result r = sb_point(input_parameters, p, n, madata.kdtree_coords);
+        (*madata.ma_coords)[i+offset] = r.c;
+        madata.ma_qidx[i+offset] = r.qidx;
+    }
+    // return ma_coords;
+}
+
+void compute_masb_points(full_parameters &input_parameters, ma_data &madata)
+    {
+#ifdef VERBOSEPRINT
+        Vrui::Misc::Timer t0;
+#endif
+        if (madata.kdtree_coords == NULL) {
+            madata.kdtree_coords = new kdtree2::KDTree((*madata.coords), input_parameters.kd_tree_reorder);
+#ifdef VERBOSEPRINT
+            t0.elapse();
+            std::cout << "Constructed kd-tree in " << t0.getTime()*1000.0 << " ms" << std::endl;
+#endif
+        }
+        madata.kdtree_coords->sort_results = true;
+
+        // Inside processing
+        {
+            sb_points(input_parameters, madata, 1);
+#ifdef VERBOSEPRINT
+            t0.elapse();
+      std::cout << "Done shrinking interior balls, took " << t0.getTime()*1000.0 << " ms" << std::endl;
+#endif
+        }
+
+        // Outside processing
+        {
+            sb_points(input_parameters, madata, 0);
+#ifdef VERBOSEPRINT
+            t0.elapse();
+      std::cout << "Done shrinking exterior balls, took " << t0.getTime()*1000.0 << " ms" << std::endl;
+#endif
+        }
+
+        // Free memory
+        delete madata.kdtree_coords; madata.kdtree_coords = NULL;
+    }
 }
 /*
 

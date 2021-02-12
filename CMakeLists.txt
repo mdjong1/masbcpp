@@ -48,7 +48,7 @@ set_property(TARGET thirdparty PROPERTY POSITION_INDEPENDENT_CODE ON)
 set(LINK_LIBS ${LINK_LIBS} thirdparty)
 
 # build a library from the masbpcpp processing functions
-add_library(masbcpp STATIC src/compute_ma_processing.cpp src/compute_normals_processing.cpp src/simplify_processing.cpp)
+add_library(masbcpp STATIC src/compute_ma_processing.cpp src/compute_normals_processing.cpp src/simplify_processing.cpp src/full_process.cpp)
 target_link_libraries(masbcpp ${LINK_LIBS})
 set_property(TARGET masbcpp PROPERTY POSITION_INDEPENDENT_CODE ON)
 
@@ -58,8 +58,9 @@ FILE(GLOB_RECURSE CNPY thirdparty/cnpy/*.cpp)
 add_executable(compute_ma src/compute_ma.cpp ${CNPY})
 add_executable(compute_normals src/compute_normals.cpp ${CNPY})
 add_executable(simplify src/simplify.cpp ${CNPY})
+add_executable(full_process src/full_process.cpp ${CNPY})
 set_target_properties(
-  compute_ma compute_normals simplify thirdparty masbcpp
+  compute_ma compute_normals simplify full_process thirdparty masbcpp
   PROPERTIES CXX_STANDARD 11
 )
 
@@ -69,5 +70,6 @@ set_target_properties(
 target_link_libraries(compute_ma masbcpp)
 target_link_libraries(compute_normals masbcpp)
 target_link_libraries(simplify masbcpp)
+target_link_libraries(full_process masbcpp)
 
-install(TARGETS compute_ma compute_normals simplify DESTINATION bin)
+install(TARGETS compute_ma compute_normals simplify full_process DESTINATION bin)

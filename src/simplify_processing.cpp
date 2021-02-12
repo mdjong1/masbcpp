@@ -42,6 +42,7 @@ SOFTWARE.
 
 // typedefs
 #include "simplify_processing.h"
+#include "full_process.h"
 
 
 
@@ -271,6 +272,20 @@ void simplify_lfs(simplify_parameters &input_parameters, ma_data& madata)
                     input_parameters.elevation_threshold, 
                     input_parameters.maximum_density,
                     input_parameters.squared);
+}
+
+void simplify_lfs(full_parameters &input_parameters, ma_data& madata)
+{
+
+    // compute lfs, simplify
+    if (input_parameters.compute_lfs)
+        compute_lfs(madata, input_parameters.bisec_threshold, input_parameters.only_inner);
+    simplify(madata, input_parameters.cellsize,
+             input_parameters.epsilon,
+             input_parameters.dimension,
+             input_parameters.elevation_threshold,
+             input_parameters.maximum_density,
+             input_parameters.squared);
 }
 
 void simplify(normals_parameters &normals_params, 
