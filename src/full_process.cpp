@@ -74,8 +74,7 @@ int main(int argc, char **argv) {
         TCLAP::ValueArg<double> epsilonArg("e", "epsilon", "Control the degree of simplification, higher values mean more simplification. Typical values are in the range [0.01,0.6].", false, 0.1, "double", cmd);
         TCLAP::ValueArg<double> cellsizeArg("c", "cellsize", "Cellsize used during grid-based lfs simplification (in units of your dataset). Large cellsize means faster processing, but potentially more noticable jumps in point density at cell boundaries.", false, 1, "double", cmd);
         TCLAP::ValueArg<double> bisecArg("b", "bisec", "Bisector threshold used to clean the MAT points before LFS computation. With lower values more aggressive cleaning is performed which means more robustness to noise (in the MAT) but also less features will be detected. Typical range [0.1,10] (degrees).", false, 1, "double", cmd);
-        TCLAP::ValueArg<double> maxdensArg("m", "max", "Upper bound point density in pts/unit^2", false, 1, "double",
-                                           cmd);
+        TCLAP::ValueArg<double> maxdensArg("m", "max", "Upper bound point density in pts/unit^2", false, 1, "double", cmd);
 
         TCLAP::ValueArg<double> fake3dArg("f", "fake3d", "Use 2D grid instead of 3D grid, intended for 2.5D datasets (eg. buildings without points only on the roof and not on the walls). In addition this mode will try to detect elevation jumps in the dataset (eg. where there should be a wall) and still try to preserve points around those areas, the value for this parameter is the threshold elevation difference (in units of your dataset) within one gridcell that will be used for the elevation jump detection function.", false, 0.5, "double", cmd);
         TCLAP::SwitchArg squaredSwitch("s", "squared", "Use squared LFS during simplification.", cmd, false);
@@ -115,15 +114,23 @@ int main(int argc, char **argv) {
         ma_data madata = {};
 
         PointList coords;
-        VectorList normals;
+
+        int THRES = 212550;
 
         for (std::string line; std::getline(std::cin, line);) {
             std::vector<float> splitLine = split(line, " ");
 
-            // # of points identifier has 1 entry on the line
-            if (splitLine.size() != 1) {
+            // Has x, y, z in line
+            if (splitLine.size() == 3) {
 
-                coords.push_back(Point(splitLine[0], splitLine[1], splitLine[2]));
+                Point newPoint = Point(splitLine[0], splitLine[1], splitLine[2]);
+
+                if (madata.bbox.isEmpty()) {
+                    madata.bbox = Box(newPoint, newPoint);
+                }
+
+                coords.push_back(newPoint);
+                madata.bbox.addPoint(newPoint);
 
             } else {
 //                madata.m = splitLine[0];
@@ -132,9 +139,11 @@ int main(int argc, char **argv) {
             }
 
             // When threshold is reached; process available points and dump result to stdout
-            if (coords.size() >= 10000) {
+            if (coords.size() == THRES) {
 
-                normals.resize(coords.size());
+                madata.m = THRES;
+
+                VectorList normals(THRES);
 
                 madata.normals = &normals;
                 madata.coords = &coords;
@@ -143,15 +152,36 @@ int main(int argc, char **argv) {
 
                 compute_normals(input_parameters, madata);
 
+                // Storage space for our results:
+                PointList ma_coords(2 * madata.m);
+
                 std::cout << "NORMALS CALCULATED" << "\n";
+
+                madata.coords = &coords;
+                madata.normals = &normals;
+                madata.ma_coords = &ma_coords;
+                madata.ma_qidx = new int[2 * madata.m];
 
                 compute_masb_points(input_parameters, madata);
 
                 std::cout << "MASB CALCULATED" << "\n";
 
+                madata.lfs = new float[madata.m];
+                madata.mask = new bool[madata.m];
+
+                std::cout << "bbox: " << madata.bbox.min[0] << " " << madata.bbox.min[1] << " " << madata.bbox.min[2] << " "
+                  << madata.bbox.max[0] << " " << madata.bbox.max[1] << " " << madata.bbox.max[2] << std::endl;
+
                 simplify_lfs(input_parameters, madata);
 
                 std::cout << "SIMPLIFIED!!" << "\n";
+
+                for (int i = 0; i < madata.m; i++) {
+                    if (madata.mask[i]) {
+                        std::cout << coords[i][0] << " " << coords[i][1] << " " << coords[i][2] << std::endl;
+                    }
+                }
+
             }
 
         }
