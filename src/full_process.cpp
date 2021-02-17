@@ -80,6 +80,8 @@ int main(int argc, char **argv) {
         TCLAP::SwitchArg squaredSwitch("s", "squared", "Use squared LFS during simplification.", cmd, false);
         TCLAP::SwitchArg nolfsSwitch("n", "no-lfs", "Don't recompute lfs.'", cmd, false);
 
+        TCLAP::ValueArg<int> pointsToProcess("x", "ptp", "", false, 10, "int", cmd);
+
         cmd.parse(argc, argv);
 
         full_parameters input_parameters;
@@ -107,15 +109,15 @@ int main(int argc, char **argv) {
         if (fake3dArg.isSet())
             input_parameters.dimension = 2;
 
-        std::cout << "Parameters: k=" << input_parameters.k << "\n";
-        std::cout << "Parameters: denoise_preserve=" << denoise_preserveArg.getValue() << ", denoise_planar="
-                  << denoise_planarArg.getValue() << ", initial_radius=" << input_parameters.initial_radius << "\n";
+//        std::cout << "Parameters: k=" << input_parameters.k << "\n";
+//        std::cout << "Parameters: denoise_preserve=" << denoise_preserveArg.getValue() << ", denoise_planar="
+//                  << denoise_planarArg.getValue() << ", initial_radius=" << input_parameters.initial_radius << "\n";
 
         ma_data madata = {};
 
         PointList coords;
 
-        int THRES = 212550;
+        int THRES = pointsToProcess.getValue();
 
         for (std::string line; std::getline(std::cin, line);) {
             std::vector<float> splitLine = split(line, " ");
@@ -125,7 +127,7 @@ int main(int argc, char **argv) {
 
                 Point newPoint = Point(splitLine[0], splitLine[1], splitLine[2]);
 
-                if (madata.bbox.isEmpty()) {
+                if (madata.bbox.isNull()) {
                     madata.bbox = Box(newPoint, newPoint);
                 }
 
@@ -148,14 +150,14 @@ int main(int argc, char **argv) {
                 madata.normals = &normals;
                 madata.coords = &coords;
 
-                std::cout << "PROCESSING" << "\n";
+//                std::cout << "PROCESSING " << coords.size() << " points" << "\n";
 
                 compute_normals(input_parameters, madata);
 
                 // Storage space for our results:
                 PointList ma_coords(2 * madata.m);
 
-                std::cout << "NORMALS CALCULATED" << "\n";
+//                std::cout << "NORMALS CALCULATED" << "\n";
 
                 madata.coords = &coords;
                 madata.normals = &normals;
@@ -164,23 +166,25 @@ int main(int argc, char **argv) {
 
                 compute_masb_points(input_parameters, madata);
 
-                std::cout << "MASB CALCULATED" << "\n";
+//                std::cout << "MASB CALCULATED" << "\n";
 
                 madata.lfs = new float[madata.m];
                 madata.mask = new bool[madata.m];
 
-                std::cout << "bbox: " << madata.bbox.min[0] << " " << madata.bbox.min[1] << " " << madata.bbox.min[2] << " "
-                  << madata.bbox.max[0] << " " << madata.bbox.max[1] << " " << madata.bbox.max[2] << std::endl;
+//                std::cout << "bbox: " << madata.bbox.min[0] << " " << madata.bbox.min[1] << " " << madata.bbox.min[2] << " "
+//                  << madata.bbox.max[0] << " " << madata.bbox.max[1] << " " << madata.bbox.max[2] << std::endl;
 
                 simplify_lfs(input_parameters, madata);
 
-                std::cout << "SIMPLIFIED!!" << "\n";
+//                std::cout << "SIMPLIFIED!!" << "\n";
 
                 for (int i = 0; i < madata.m; i++) {
                     if (madata.mask[i]) {
                         std::cout << coords[i][0] << " " << coords[i][1] << " " << coords[i][2] << std::endl;
                     }
                 }
+
+                coords.resize(0);
 
             }
 
