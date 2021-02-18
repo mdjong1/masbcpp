@@ -53,6 +53,46 @@ std::vector<float> split(std::string str, const std::string &token) {
     return result;
 }
 
+void simplifyData(full_parameters input_parameters, PointList &coords, ma_data &madata) {
+    madata.m = coords.size();
+
+    VectorList normals(madata.m);
+
+    madata.normals = &normals;
+    madata.coords = &coords;
+
+    // Stage 1: Compute the normals of all points currently in memory
+    compute_normals(input_parameters, madata);
+
+    // Storage space for our results:
+    PointList ma_coords(2 * madata.m);
+
+    madata.coords = &coords;
+    madata.normals = &normals;
+    madata.ma_coords = &ma_coords;
+    madata.ma_qidx = new int[2 * madata.m];
+
+    // Stage 2: Compute the MASB
+    compute_masb_points(input_parameters, madata);
+
+    madata.lfs = new float[madata.m];
+    madata.mask = new bool[madata.m];
+
+    // Stage 3: Simplify the LFS of the points
+    simplify_lfs(input_parameters, madata);
+
+    // Stage 4: Release points remaining after simplification to stdout
+    // TODO: Do something with point offset?
+    for (int i = 0; i < madata.m; i++) {
+        if (madata.mask[i]) {
+            std::cout << coords[i][0] << " " << coords[i][1] << " " << coords[i][2] << std::endl;
+        }
+    }
+
+    // Delete all points that have been processed in this batch to start fresh
+    coords.resize(0);
+}
+
 int main(int argc, char **argv) {
     // parse command line arguments
     try {
@@ -80,7 +120,7 @@ int main(int argc, char **argv) {
         TCLAP::SwitchArg squaredSwitch("s", "squared", "Use squared LFS during simplification.", cmd, false);
         TCLAP::SwitchArg nolfsSwitch("n", "no-lfs", "Don't recompute lfs.'", cmd, false);
 
-        TCLAP::ValueArg<int> pointsToProcess("x", "ptp", "", false, 10, "int", cmd);
+        TCLAP::ValueArg<int> pointsToProcess("x", "ptp", "How many points to process per 'batch'", false, 10000, "int", cmd);
 
         cmd.parse(argc, argv);
 
@@ -120,7 +160,7 @@ int main(int argc, char **argv) {
             std::vector<float> splitLine = split(line, " ");
 
             // Has x, y, z in line
-            // TODO: Might not be necessary anymore? Dependant on input format.
+            // TODO: Might not be necessary anymore? Dependent on input format.
             if (splitLine.size() == 3) {
 
                 Point newPoint = Point(splitLine[0], splitLine[1], splitLine[2]);
@@ -137,48 +177,13 @@ int main(int argc, char **argv) {
             // When threshold is reached; process available points and dump result to stdout
             if (coords.size() == NumPointsToProcessPerBatch) {
 
-                // TODO: Cleanup this assignment
-                madata.m = NumPointsToProcessPerBatch;
-
-                VectorList normals(NumPointsToProcessPerBatch);
-
-                madata.normals = &normals;
-                madata.coords = &coords;
-
-                // Stage 1: Compute the normals of all points currently in memory
-                compute_normals(input_parameters, madata);
-
-                // Storage space for our results:
-                PointList ma_coords(2 * madata.m);
-
-                madata.coords = &coords;
-                madata.normals = &normals;
-                madata.ma_coords = &ma_coords;
-                madata.ma_qidx = new int[2 * madata.m];
-
-                // Stage 2: Compute the MASB
-                compute_masb_points(input_parameters, madata);
-
-                madata.lfs = new float[madata.m];
-                madata.mask = new bool[madata.m];
-
-                // Stage 3: Simplify the LFS of the points
-                simplify_lfs(input_parameters, madata);
-
-                // Stage 4: Release points remaining after simplification to stdout
-                // TODO: Do something with point offset?
-                for (int i = 0; i < madata.m; i++) {
-                    if (madata.mask[i]) {
-                        std::cout << coords[i][0] << " " << coords[i][1] << " " << coords[i][2] << std::endl;
-                    }
-                }
-
-                // Delete all points that have been processed in this batch to start fresh
-                coords.resize(0);
+                simplifyData(input_parameters, coords, madata);
 
             }
 
         }
+
+        simplifyData(input_parameters, coords, madata);
 
         // Free memory
         delete[] madata.mask;
