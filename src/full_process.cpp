@@ -37,16 +37,16 @@ SOFTWARE.
 using namespace masb;
 
 // https://stackoverflow.com/questions/5607589/right-way-to-split-an-stdstring-into-a-vectorstring
-std::vector<float> split(std::string str, const std::string &token) {
-    std::vector<float> result;
+std::vector<std::string> split(std::string str, const std::string &token) {
+    std::vector<std::string> result;
     while (!str.empty()) {
         int index = str.find(token);
         if (index != std::string::npos) {
-            result.push_back(std::stof(str.substr(0, index)));
+            result.push_back(str.substr(0, index));
             str = str.substr(index + token.size());
-            if (str.empty())result.push_back(std::stof(str));
+            if (str.empty())result.push_back(str);
         } else {
-            result.push_back(std::stof(str));
+            result.push_back(str);
             str = "";
         }
     }
@@ -157,12 +157,22 @@ int main(int argc, char **argv) {
         int NumPointsToProcessPerBatch = pointsToProcess.getValue();
 
         for (std::string line; std::getline(std::cin, line);) {
-            std::vector<float> splitLine = split(line, " ");
+            std::vector<std::string> splitLine = split(line, " ");
 
-            // Has x, y, z in line
-            // TODO: Might not be necessary anymore? Dependent on input format.
-            if (splitLine.size() == 3) {
-                Point newPoint = Point(splitLine[0], splitLine[1], splitLine[2]);
+            if (splitLine[0] == "b") {
+                madata.bbox = Box(
+                        std::stof(splitLine[1]),
+                        std::stof(splitLine[2]),
+                        std::stof(splitLine[3]),
+                        std::stof(splitLine[4])
+                );
+
+            } else if (splitLine[0] == "v") {
+                Point newPoint = Point(
+                        std::stof(splitLine[1]),
+                        std::stof(splitLine[2]),
+                        std::stof(splitLine[3])
+                );
 
                 if (madata.bbox.isNull()) {
                     madata.bbox = Box(newPoint, newPoint);
