@@ -53,7 +53,31 @@ std::vector<std::string> split(std::string str, const std::string &token) {
     return result;
 }
 
-void simplifyData(full_parameters input_parameters, PointList &coords, ma_data &madata) {
+int * getCell(float x, float y, int cellSize, float minX, float minY) {
+    int result[2];
+    result[0] = floor((x - minX) / cellSize);
+    result[1] = floor((y - minY) / cellSize);
+    return result;
+}
+
+void simplifyData(int cellX,
+                  int cellY,
+                  full_parameters input_parameters,
+                  const std::vector<std::vector<std::vector<Point>>>& gridCells,
+                  PointList &coords,
+                  ma_data &madata,
+                  float offset[3]) {
+
+    for (auto point : gridCells[cellX][cellY]) {
+        if (madata.bbox.isNull()) {
+            madata.bbox = Box(point, point);
+        }
+        else {
+            madata.bbox.addPoint(point);
+        }
+        coords.push_back(point);
+    }
+
     madata.m = coords.size();
 
     VectorList normals(madata.m);
@@ -81,18 +105,21 @@ void simplifyData(full_parameters input_parameters, PointList &coords, ma_data &
     // Stage 3: Simplify the LFS of the points
     simplify_lfs(input_parameters, madata);
 
+    // Set decimal precision for floating points
+    std::cout << std::setprecision(3) << std::fixed;
+
     // Stage 4: Release points remaining after simplification to stdout
     // TODO: Do something with point offset?
     for (int i = 0; i < madata.m; i++) {
         if (madata.mask[i]) {
-            std::cout << coords[i][0] << " " << coords[i][1] << " " << coords[i][2] << std::endl;
+            std::cout << "v " << coords[i][0] + offset[0] << " " << coords[i][1] + offset[1] << " " << coords[i][2] + offset[2] << std::endl;
         }
     }
 
     // Delete all points that have been processed in this batch to start fresh
     coords.resize(0);
 
-    // Reset bbox for new set of points
+    // Clear bbox
     madata.bbox = Box();
 }
 
@@ -152,51 +179,94 @@ int main(int argc, char **argv) {
         if (fake3dArg.isSet())
             input_parameters.dimension = 2;
 
+        int NumPointsToProcessPerBatch = pointsToProcess.getValue();
+
+        bool sprinkling = true;
+        float offset[3];
 
         ma_data madata = {};
-
         PointList coords;
 
-        int NumPointsToProcessPerBatch = pointsToProcess.getValue();
+        float minX;
+        float minY;
+        int cellSize;
+
+        std::vector<std::vector<std::vector<Point>>> gridCells;
 
         for (std::string line; std::getline(std::cin, line);) {
             std::vector<std::string> splitLine = split(line, " ");
 
-            if (splitLine[0] == "b") {
-                madata.bbox = Box(
-                        std::stof(splitLine[1]),
-                        std::stof(splitLine[2]),
-                        std::stof(splitLine[3]),
-                        std::stof(splitLine[4])
-                );
+//            std::cout << line << std::endl;
 
-            } else if (splitLine[0] == "v") {
-                Point newPoint = Point(
-                        std::stof(splitLine[1]),
-                        std::stof(splitLine[2]),
-                        std::stof(splitLine[3])
-                );
+            // All sprinkle points have passed, so can safely start simplifying
+            if (splitLine[0] == "#" && splitLine[1] == "endsprinkle") {
+                sprinkling = false;
 
-                if (madata.bbox.isNull()) {
-                    madata.bbox = Box(newPoint, newPoint);
+            } else if (splitLine[0] == "s") {
+                cellSize = std::stoi(splitLine[1]);
+
+                std::cout << line << std::endl;
+
+            } else if (splitLine[0] == "b") {
+                minX = std::stof(splitLine[1]);
+                minY = std::stof(splitLine[2]);
+
+                float maxX = std::stof(splitLine[3]);
+                float maxY = std::stof(splitLine[4]);
+
+                float minZ = std::stof(splitLine[5]);
+                float maxZ = std::stof(splitLine[6]);
+
+                offset[0] = minX + (maxX - minX) / 2;
+                offset[1] = minY + (maxY - minY) / 2;
+                offset[2] = minZ + (maxZ - minZ) / 2;
+
+                std::cout << line << std::endl;
+
+            } else if (splitLine[0] == "c") {
+                int gridSize = std::stoi(splitLine[1]);
+
+                gridCells.resize(gridSize);
+
+                for (auto &cell : gridCells) {
+                    cell.resize(gridSize);
                 }
 
-                coords.push_back(newPoint);
-                madata.bbox.addPoint(newPoint);
+                std::cout << line << std::endl;
 
-            }
+            } else if (splitLine[0] == "v" && !sprinkling) {
 
-            // When threshold is reached; process available points and dump result to stdout
-            if (coords.size() == NumPointsToProcessPerBatch) {
+                std::cout << line << std::endl;
 
-                simplifyData(input_parameters, coords, madata);
+                float x = std::stof(splitLine[1]);
+                float y = std::stof(splitLine[2]);
+                float z = std::stof(splitLine[3]);
 
+                int * cellId = getCell(x, y, cellSize, minX, minY);
+
+                Point newPoint = Point(x - offset[0], y - offset[1], z - offset[2]);
+
+                gridCells[cellId[0]][cellId[1]].push_back(newPoint);
+
+            } else if (splitLine[0] == "x") {
+
+                int cellX = std::stoi(splitLine[1]);
+                int cellY = std::stoi(splitLine[2]);
+
+                if (!gridCells[cellX][cellY].empty()) {
+                    simplifyData(cellX, cellY, input_parameters, gridCells, coords, madata, offset);
+                }
+
+                std::cout << line << std::endl;
+
+            }  else {
+                std::cout << line << std::endl;
             }
 
         }
 
         // Process remaining points
-        simplifyData(input_parameters, coords, madata);
+        // simplifyData(cellX, cellY, input_parameters, gridCells, coords, madata, offset);
 
         // Free memory
         delete[] madata.mask;
