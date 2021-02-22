@@ -91,6 +91,9 @@ void simplifyData(full_parameters input_parameters, PointList &coords, ma_data &
 
     // Delete all points that have been processed in this batch to start fresh
     coords.resize(0);
+
+    // Reset bbox for new set of points
+    madata.bbox = Box();
 }
 
 int main(int argc, char **argv) {
