@@ -162,7 +162,6 @@ int main(int argc, char **argv) {
             // Has x, y, z in line
             // TODO: Might not be necessary anymore? Dependent on input format.
             if (splitLine.size() == 3) {
-
                 Point newPoint = Point(splitLine[0], splitLine[1], splitLine[2]);
 
                 if (madata.bbox.isNull()) {
@@ -183,6 +182,7 @@ int main(int argc, char **argv) {
 
         }
 
+        // Process remaining points
         simplifyData(input_parameters, coords, madata);
 
         // Free memory
