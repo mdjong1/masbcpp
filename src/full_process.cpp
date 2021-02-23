@@ -274,8 +274,6 @@ int main(int argc, char **argv) {
 
             } else if (splitLine[0] == "v" && !sprinkling) {
 
-                std::cout << line << std::endl;
-
                 float x = std::stof(splitLine[1]);
                 float y = std::stof(splitLine[2]);
                 float z = std::stof(splitLine[3]);
