@@ -399,7 +399,7 @@ void compute_masb_points(full_parameters &input_parameters, ma_data &madata)
         }
 
         // Free memory
-        delete madata.kdtree_coords; madata.kdtree_coords = NULL;
+//        delete madata.kdtree_coords; madata.kdtree_coords = NULL;
     }
 }
 /*

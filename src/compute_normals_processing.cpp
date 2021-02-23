@@ -122,6 +122,6 @@ void compute_normals(full_parameters &input_parameters, ma_data &madata)
     }
 
     // Free memory
-    delete madata.kdtree_coords; madata.kdtree_coords = NULL;
+//    delete madata.kdtree_coords; madata.kdtree_coords = NULL;
 }
 }

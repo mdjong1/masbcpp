@@ -37,16 +37,16 @@ SOFTWARE.
 using namespace masb;
 
 // https://stackoverflow.com/questions/5607589/right-way-to-split-an-stdstring-into-a-vectorstring
-std::vector<float> split(std::string str, const std::string &token) {
-    std::vector<float> result;
+std::vector<std::string> split(std::string str, const std::string &token) {
+    std::vector<std::string> result;
     while (!str.empty()) {
         int index = str.find(token);
         if (index != std::string::npos) {
-            result.push_back(std::stof(str.substr(0, index)));
+            result.push_back(str.substr(0, index));
             str = str.substr(index + token.size());
-            if (str.empty())result.push_back(std::stof(str));
+            if (str.empty())result.push_back(str);
         } else {
-            result.push_back(std::stof(str));
+            result.push_back(str);
             str = "";
         }
     }
@@ -54,8 +54,30 @@ std::vector<float> split(std::string str, const std::string &token) {
 }
 
 void simplifyData(full_parameters input_parameters, PointList &coords, ma_data &madata) {
-    madata.m = coords.size();
+    std::ofstream myfile;
+    myfile.open ("last_point_set.xyz");
+    for (auto coord : coords) {
+        myfile << coord[0] << " " << coord[1] << " " << coord[2] << std::endl;
+    }
+    myfile.close();
 
+    std::vector<int> duplicates;
+
+    for (int i = 0; i < coords.size(); i++) {
+        for (int i2 = i; i2 < coords.size(); i2++) {
+            if (i != i2 && coords[i][0] == coords[i2][0] && coords[i][1] == coords[i2][1] && coords[i][2] == coords[i2][2]) {
+                duplicates.push_back(i2);
+            }
+        }
+    }
+
+    std::reverse(duplicates.begin(), duplicates.end());
+
+    for (auto index : duplicates) {
+        coords.erase(coords.begin() + index);
+    }
+
+    madata.m = coords.size();
     VectorList normals(madata.m);
 
     madata.normals = &normals;
@@ -94,6 +116,14 @@ void simplifyData(full_parameters input_parameters, PointList &coords, ma_data &
 
     // Reset bbox for new set of points
     madata.bbox = Box();
+
+    // Free memory
+    delete[] madata.mask;
+    madata.mask = nullptr;
+    delete[] madata.lfs;
+    madata.lfs = nullptr;
+    delete[] madata.ma_qidx;
+    madata.ma_qidx = nullptr;
 }
 
 int main(int argc, char **argv) {
@@ -152,20 +182,21 @@ int main(int argc, char **argv) {
         if (fake3dArg.isSet())
             input_parameters.dimension = 2;
 
-
-        ma_data madata = {};
-
-        PointList coords;
-
         int NumPointsToProcessPerBatch = pointsToProcess.getValue();
 
-        for (std::string line; std::getline(std::cin, line);) {
-            std::vector<float> splitLine = split(line, " ");
+        ma_data madata;
+        PointList coords;
 
-            // Has x, y, z in line
-            // TODO: Might not be necessary anymore? Dependent on input format.
+        for (std::string line; std::getline(std::cin, line);) {
+            std::vector<std::string> splitLine = split(line, " ");
+
             if (splitLine.size() == 3) {
-                Point newPoint = Point(splitLine[0], splitLine[1], splitLine[2]);
+
+                Point newPoint = Point(
+                        std::stof(splitLine[0]),
+                        std::stof(splitLine[1]),
+                        std::stof(splitLine[2])
+                );
 
                 if (madata.bbox.isNull()) {
                     madata.bbox = Box(newPoint, newPoint);
@@ -173,28 +204,17 @@ int main(int argc, char **argv) {
 
                 coords.push_back(newPoint);
                 madata.bbox.addPoint(newPoint);
-
             }
 
             // When threshold is reached; process available points and dump result to stdout
             if (coords.size() == NumPointsToProcessPerBatch) {
 
                 simplifyData(input_parameters, coords, madata);
-
             }
-
         }
 
         // Process remaining points
         simplifyData(input_parameters, coords, madata);
-
-        // Free memory
-        delete[] madata.mask;
-        madata.mask = nullptr;
-        delete[] madata.lfs;
-        madata.lfs = nullptr;
-        delete[] madata.ma_qidx;
-        madata.ma_qidx = nullptr;
 
 
     } catch (TCLAP::ArgException &e) { std::cerr << "Error: " << e.error() << " for " << e.argId() << std::endl; }
