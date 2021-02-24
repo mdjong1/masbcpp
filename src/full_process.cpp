@@ -84,7 +84,7 @@ void simplifyData(int cellX,
         }
     }
 
-    std::reverse(gridCells[cellX][cellY].begin(), gridCells[cellX][cellY].end());
+    std::reverse(duplicates.begin(), duplicates.end());
 
     for (auto index : duplicates) {
         gridCells[cellX][cellY].erase(gridCells[cellX][cellY].begin() + index);
@@ -135,9 +135,6 @@ void simplifyData(int cellX,
     simplify_lfs(input_parameters, madata);
 
     std::cout << "Simplified LFS" << std::endl;
-
-    // Set decimal precision for floating points
-    std::cout << std::setprecision(3) << std::fixed;
 
     // Stage 4: Release points remaining after simplification to stdout
     for (int i = 0; i < madata.m; i++) {
@@ -221,6 +218,9 @@ int main(int argc, char **argv) {
             input_parameters.dimension = 2;
 
         int NumPointsToProcessPerBatch = pointsToProcess.getValue();
+
+        // Set decimal precision for floating points
+        std::cout << std::setprecision(3) << std::fixed;
 
         bool sprinkling = true;
         float offset[3];
