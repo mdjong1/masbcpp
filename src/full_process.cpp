@@ -54,6 +54,9 @@ std::vector<std::string> split(std::string str, const std::string &token) {
 }
 
 void simplifyData(full_parameters input_parameters, PointList &coords, ma_data &madata) {
+    // Set decimal precision for floating points
+    std::cout << std::setprecision(3) << std::fixed;
+
     std::ofstream myfile;
     myfile.open ("last_point_set.xyz");
     for (auto coord : coords) {
@@ -67,6 +70,7 @@ void simplifyData(full_parameters input_parameters, PointList &coords, ma_data &
         for (int i2 = i; i2 < coords.size(); i2++) {
             if (i != i2 && coords[i][0] == coords[i2][0] && coords[i][1] == coords[i2][1] && coords[i][2] == coords[i2][2]) {
                 duplicates.push_back(i2);
+                std::cout << "Found duplicate: " << i << " == " << i2 << std::endl;
             }
         }
     }
