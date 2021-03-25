@@ -121,7 +121,7 @@ void simplifyData(full_parameters input_parameters, PointList &coords, ma_data &
     // Stage 4: Release points remaining after simplification to stdout
     for (int i = 0; i < madata.m; i++) {
         if (madata.mask[i]) {
-            std::cout << coords[i][0] + offset[0] << " " << coords[i][1] + offset[1] << " " << coords[i][2] + offset[2] << std::endl;
+            std::cout << std::setprecision(9) << coords[i][0] + offset[0] << " " << coords[i][1] + offset[1] << " " << std::setprecision(4) << coords[i][2] + offset[2] << std::endl;
         }
     }
 
