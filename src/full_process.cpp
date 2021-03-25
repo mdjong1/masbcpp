@@ -53,16 +53,13 @@ std::vector<std::string> split(std::string str, const std::string &token) {
     return result;
 }
 
-void simplifyData(full_parameters input_parameters, PointList &coords, ma_data &madata) {
-    // Set decimal precision for floating points
-    std::cout << std::setprecision(3) << std::fixed;
-
-    std::ofstream myfile;
-    myfile.open ("last_point_set.xyz");
-    for (auto coord : coords) {
-        myfile << coord[0] << " " << coord[1] << " " << coord[2] << std::endl;
-    }
-    myfile.close();
+void simplifyData(full_parameters input_parameters, PointList &coords, ma_data &madata, float offset[3]) {
+//    std::ofstream myfile;
+//    myfile.open ("last_point_set.xyz");
+//    for (auto coord : coords) {
+//        myfile << std::setprecision(3) << std::fixed << coord[0] << " " << coord[1] << " " << coord[2] << std::endl;
+//    }
+//    myfile.close();
 
     std::vector<int> duplicates;
 
@@ -70,10 +67,14 @@ void simplifyData(full_parameters input_parameters, PointList &coords, ma_data &
         for (int i2 = i; i2 < coords.size(); i2++) {
             if (i != i2 && coords[i][0] == coords[i2][0] && coords[i][1] == coords[i2][1] && coords[i][2] == coords[i2][2]) {
                 duplicates.push_back(i2);
-                std::cout << "Found duplicate: " << i << " == " << i2 << std::endl;
+                std::cerr << "Found duplicate: " << i << " == " << i2 << std::endl;
             }
         }
     }
+
+    std::cerr << "Found all duplicates! " << duplicates.size() << std::endl;
+
+    std::cerr << "Coords size before erasing: " << coords.size() << std::endl;
 
     std::reverse(duplicates.begin(), duplicates.end());
 
@@ -81,14 +82,20 @@ void simplifyData(full_parameters input_parameters, PointList &coords, ma_data &
         coords.erase(coords.begin() + index);
     }
 
+    std::cerr << "Erased duplicates! Coords size now: " << coords.size() << std::endl;
+
     madata.m = coords.size();
     VectorList normals(madata.m);
 
     madata.normals = &normals;
     madata.coords = &coords;
 
+    std::cerr << "Going to compute normals" << std::endl;
+
     // Stage 1: Compute the normals of all points currently in memory
     compute_normals(input_parameters, madata);
+
+    std::cerr << "Computed normals" << std::endl;
 
     // Storage space for our results:
     PointList ma_coords(2 * madata.m);
@@ -101,17 +108,20 @@ void simplifyData(full_parameters input_parameters, PointList &coords, ma_data &
     // Stage 2: Compute the MASB
     compute_masb_points(input_parameters, madata);
 
+    std::cerr << "Computed MASB" << std::endl;
+
     madata.lfs = new float[madata.m];
     madata.mask = new bool[madata.m];
 
     // Stage 3: Simplify the LFS of the points
     simplify_lfs(input_parameters, madata);
 
+    std::cerr << "Simplified LFS" << std::endl;
+
     // Stage 4: Release points remaining after simplification to stdout
-    // TODO: Do something with point offset?
     for (int i = 0; i < madata.m; i++) {
         if (madata.mask[i]) {
-            std::cout << coords[i][0] << " " << coords[i][1] << " " << coords[i][2] << std::endl;
+            std::cout << coords[i][0] + offset[0] << " " << coords[i][1] + offset[1] << " " << coords[i][2] + offset[2] << std::endl;
         }
     }
 
@@ -191,8 +201,16 @@ int main(int argc, char **argv) {
         ma_data madata;
         PointList coords;
 
+        float offset[3];
+
         for (std::string line; std::getline(std::cin, line);) {
             std::vector<std::string> splitLine = split(line, " ");
+
+            if (splitLine.size() == 4) {
+                offset[0] = std::stof(splitLine[1]);
+                offset[1] = std::stof(splitLine[2]);
+                offset[2] = std::stof(splitLine[3]);
+            }
 
             if (splitLine.size() == 3) {
 
@@ -213,12 +231,14 @@ int main(int argc, char **argv) {
             // When threshold is reached; process available points and dump result to stdout
             if (coords.size() == NumPointsToProcessPerBatch) {
 
-                simplifyData(input_parameters, coords, madata);
+                simplifyData(input_parameters, coords, madata, offset);
             }
         }
 
+        std::cerr << "Processing final points" << std::endl;
+
         // Process remaining points
-        simplifyData(input_parameters, coords, madata);
+        simplifyData(input_parameters, coords, madata, offset);
 
 
     } catch (TCLAP::ArgException &e) { std::cerr << "Error: " << e.error() << " for " << e.argId() << std::endl; }
