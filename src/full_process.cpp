@@ -53,55 +53,30 @@ std::vector<std::string> split(std::string str, const std::string &token) {
     return result;
 }
 
-int *getCell(float x, float y, int cellSize, float minX, float minY) {
-    int result[2];
-    result[0] = floor((x - minX) / cellSize);
-    result[1] = floor((y - minY) / cellSize);
-    return result;
-}
-
-void simplifyData(int cellX,
-                  int cellY,
-                  full_parameters input_parameters,
-                  std::vector<std::vector<std::vector<Point>>> &gridCells,
-                  float offset[3]) {
-
-    ma_data madata = {};
-    PointList coords;
+void simplifyData(full_parameters input_parameters, PointList &coords, ma_data madata, float offset[3]) {
 
     std::vector<int> duplicates;
 
-    for (int i = 0; i < gridCells[cellX][cellY].size(); i++) {
-        for (int i2 = i; i2 < gridCells[cellX][cellY].size(); i2++) {
-            if (gridCells[cellX][cellY][i][0] == gridCells[cellX][cellY][i2][0]
-            && gridCells[cellX][cellY][i][1] == gridCells[cellX][cellY][i2][1]
-            && gridCells[cellX][cellY][i][2] == gridCells[cellX][cellY][i2][2]) {
-                if (i != i2) {
-                    duplicates.push_back(i2);
-//                    std::cout << "FOUND A DUPLICATE: " << i << " == " << i2 << std::endl;
-                }
+    for (int i = 0; i < coords.size(); i++) {
+        for (int i2 = i; i2 < coords.size(); i2++) {
+            if (i != i2 && coords[i][0] == coords[i2][0] && coords[i][1] == coords[i2][1] && coords[i][2] == coords[i2][2]) {
+                duplicates.push_back(i2);
+                std::cerr << "Found duplicate: " << i << " == " << i2 << std::endl;
             }
         }
     }
 
+    std::cerr << "Found all duplicates! " << duplicates.size() << std::endl;
+
+    std::cerr << "Coords size before erasing: " << coords.size() << std::endl;
+
     std::reverse(duplicates.begin(), duplicates.end());
 
     for (auto index : duplicates) {
-        gridCells[cellX][cellY].erase(gridCells[cellX][cellY].begin() + index);
+        coords.erase(coords.begin() + index);
     }
 
-    for (auto point : gridCells[cellX][cellY]) {
-        if (madata.bbox.isNull()) {
-//            std::cout << "Assigned new BBox" << std::endl;
-            madata.bbox = Box(point, point);
-        }
-        else {
-            madata.bbox.addPoint(point);
-        }
-        coords.push_back(point);
-    }
-
-//    std::cout << "Loaded coords: " << coords.size() << " points" << std::endl;
+    std::cerr << "Erased duplicates! Coords size now: " << coords.size() << std::endl;
 
     madata.m = coords.size();
 
@@ -113,20 +88,18 @@ void simplifyData(int cellX,
     // Stage 1: Compute the normals of all points currently in memory
     compute_normals(input_parameters, madata);
 
-//    std::cout << "Computed normals" << std::endl;
+    std::cerr << "Computed normals" << std::endl;
 
     // Storage space for our results:
     PointList ma_coords(2 * madata.m);
 
-    madata.coords = &coords;
-    madata.normals = &normals;
     madata.ma_coords = &ma_coords;
     madata.ma_qidx = new int[2 * madata.m];
 
     // Stage 2: Compute the MASB
     compute_masb_points(input_parameters, madata);
 
-    std::cout << "Computed MASB" << std::endl;
+    std::cerr << "Computed MASB" << std::endl;
 
     madata.lfs = new float[madata.m];
     madata.mask = new bool[madata.m];
@@ -134,16 +107,16 @@ void simplifyData(int cellX,
     // Stage 3: Simplify the LFS of the points
     simplify_lfs(input_parameters, madata);
 
-    std::cout << "Simplified LFS" << std::endl;
+    std::cerr << "Simplified LFS" << std::endl;
 
     // Stage 4: Release points remaining after simplification to stdout
     for (int i = 0; i < madata.m; i++) {
         if (madata.mask[i]) {
-            std::cout << "v " << coords[i][0] + offset[0] << " " << coords[i][1] + offset[1] << " " << coords[i][2] + offset[2] << std::endl;
+            std::cout << "v " << std::setprecision(9) << coords[i][0] + offset[0] << " " << coords[i][1] + offset[1] << " " << std::setprecision(4) << coords[i][2] + offset[2] << std::endl;
         }
     }
 
-//    std::cout << "Output" << std::endl;
+    std::cerr << "Output complete" << std::endl;
 
     // Free memory
     delete[] madata.mask;
@@ -153,10 +126,6 @@ void simplifyData(int cellX,
     delete[] madata.ma_qidx;
     madata.ma_qidx = nullptr;
 
-    // Delete all points that have been processed in this batch to start fresh
-    coords.resize(0);
-    gridCells[cellX][cellY].resize(0);
-
     // Clear bbox
     madata.bbox = Box();
 }
@@ -165,9 +134,6 @@ int main(int argc, char **argv) {
     // parse command line arguments
     try {
         TCLAP::CmdLine cmd("Estimates normals using PCA, see also https://github.com/tudelft3d/masbcpp", ' ', "0.1");
-
-//        TCLAP::UnlabeledValueArg<std::string> inputArg("input", "path to input las/laz file", true, "", "input file", cmd);
-//        TCLAP::UnlabeledValueArg<std::string> outputArg("output", "path to output laz file.", false, "", "output file", cmd);
 
         TCLAP::ValueArg<int> kArg("k", "kneighbors", "number of nearest neighbours to use for PCA", false, 10, "int", cmd);
 
@@ -187,8 +153,6 @@ int main(int argc, char **argv) {
         TCLAP::ValueArg<double> fake3dArg("f", "fake3d", "Use 2D grid instead of 3D grid, intended for 2.5D datasets (eg. buildings without points only on the roof and not on the walls). In addition this mode will try to detect elevation jumps in the dataset (eg. where there should be a wall) and still try to preserve points around those areas, the value for this parameter is the threshold elevation difference (in units of your dataset) within one gridcell that will be used for the elevation jump detection function.", false, 0.5, "double", cmd);
         TCLAP::SwitchArg squaredSwitch("s", "squared", "Use squared LFS during simplification.", cmd, false);
         TCLAP::SwitchArg nolfsSwitch("n", "no-lfs", "Don't recompute lfs.'", cmd, false);
-
-        TCLAP::ValueArg<int> pointsToProcess("x", "ptp", "How many points to process per 'batch'", false, 10000, "int", cmd);
 
         cmd.parse(argc, argv);
 
@@ -217,37 +181,22 @@ int main(int argc, char **argv) {
         if (fake3dArg.isSet())
             input_parameters.dimension = 2;
 
-        int NumPointsToProcessPerBatch = pointsToProcess.getValue();
-
-        // Set decimal precision for floating points
-        std::cout << std::setprecision(3) << std::fixed;
-
         bool sprinkling = true;
         float offset[3];
 
-        float minX;
-        float minY;
-        int cellSize;
-
-        std::vector<std::vector<std::vector<Point>>> gridCells;
+        PointList coords;
+        ma_data madata;
 
         for (std::string line; std::getline(std::cin, line);) {
             std::vector<std::string> splitLine = split(line, " ");
-
-//            std::cout << line << std::endl;
 
             // All sprinkle points have passed, so can safely start simplifying
             if (splitLine[0] == "#" && splitLine[1] == "endsprinkle") {
                 sprinkling = false;
 
-            } else if (splitLine[0] == "s") {
-                cellSize = std::stoi(splitLine[1]);
-
-                std::cout << line << std::endl;
-
             } else if (splitLine[0] == "b") {
-                minX = std::stof(splitLine[1]);
-                minY = std::stof(splitLine[2]);
+                float minX = std::stof(splitLine[1]);
+                float minY = std::stof(splitLine[2]);
 
                 float maxX = std::stof(splitLine[3]);
                 float maxY = std::stof(splitLine[4]);
@@ -261,41 +210,29 @@ int main(int argc, char **argv) {
 
                 std::cout << line << std::endl;
 
-            } else if (splitLine[0] == "c") {
-                int gridSize = std::stoi(splitLine[1]);
-
-                gridCells.resize(gridSize);
-
-                for (auto &cell : gridCells) {
-                    cell.resize(gridSize);
-                }
-
-                std::cout << line << std::endl;
-
             } else if (splitLine[0] == "v" && !sprinkling) {
 
                 float x = std::stof(splitLine[1]);
                 float y = std::stof(splitLine[2]);
                 float z = std::stof(splitLine[3]);
 
-                int * cellId = getCell(x, y, cellSize, minX, minY);
-
                 Point newPoint = Point(x - offset[0], y - offset[1], z - offset[2]);
 
-                gridCells[cellId[0]][cellId[1]].push_back(newPoint);
+                if (madata.bbox.isNull()) {
+                    madata.bbox = Box(newPoint, newPoint);
+                }
+
+                coords.push_back(newPoint);
+                madata.bbox.addPoint(newPoint);
 
             } else if (splitLine[0] == "x") {
 
-                int cellX = std::stoi(splitLine[1]);
-                int cellY = std::stoi(splitLine[2]);
+                if (!coords.empty()) {
+                    simplifyData(input_parameters, coords, madata, offset);
 
-                if (!gridCells[cellX][cellY].empty()) {
-//                    std::cout << "Starting simp" << std::endl;
-                    simplifyData(cellX, cellY, input_parameters, gridCells, offset);
-//                    std::cout << "Ending simp" << std::endl;
-
-                    // Empty the cell
-                    gridCells[cellX][cellY].resize(0);
+                    // Reset coords and bbox
+                    coords.resize(0);
+                    madata.bbox = Box();
                 }
 
                 std::cout << line << std::endl;
@@ -306,8 +243,10 @@ int main(int argc, char **argv) {
 
         }
 
-        // Process remaining points
-        // simplifyData(cellX, cellY, input_parameters, gridCells, coords, madata, offset);
+        // Process remaining points, if any
+        if (!coords.empty()) {
+            simplifyData(input_parameters, coords, madata, offset);
+        }
 
     } catch (TCLAP::ArgException &e) { std::cerr << "Error: " << e.error() << " for " << e.argId() << std::endl; }
 

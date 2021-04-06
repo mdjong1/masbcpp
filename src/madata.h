@@ -29,16 +29,16 @@ SOFTWARE.
 
 namespace masb {
 struct ma_data {
-   unsigned int m{};
+   unsigned int m;
    Box bbox;
 
-   PointList *coords{}; // don't own this memory
-   VectorList *normals{}; // don't own this memory
-   PointList *ma_coords{}; // don't own this memory
-   int *ma_qidx{};
+   PointList *coords; // don't own this memory
+   VectorList *normals; // don't own this memory
+   PointList *ma_coords; // don't own this memory
+   int *ma_qidx;
 
-   float *lfs{};
-   bool *mask{};
+   float *lfs;
+   bool *mask;
    
    kdtree2::KDTree* kdtree_coords = nullptr;
 };
