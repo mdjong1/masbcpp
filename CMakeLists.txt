@@ -58,9 +58,9 @@ FILE(GLOB_RECURSE CNPY thirdparty/cnpy/*.cpp)
 add_executable(compute_ma src/compute_ma.cpp ${CNPY})
 add_executable(compute_normals src/compute_normals.cpp ${CNPY})
 add_executable(simplify src/simplify.cpp ${CNPY})
-add_executable(full_process src/full_process.cpp ${CNPY})
+add_executable(streaming_mat_simplification src/full_process.cpp ${CNPY})
 set_target_properties(
-  compute_ma compute_normals simplify full_process thirdparty masbcpp
+  compute_ma compute_normals simplify streaming_mat_simplification thirdparty masbcpp
   PROPERTIES CXX_STANDARD 11
 )
 
@@ -70,6 +70,6 @@ set_target_properties(
 target_link_libraries(compute_ma masbcpp)
 target_link_libraries(compute_normals masbcpp)
 target_link_libraries(simplify masbcpp)
-target_link_libraries(full_process masbcpp)
+target_link_libraries(streaming_mat_simplification masbcpp)
 
-install(TARGETS compute_ma compute_normals simplify full_process DESTINATION bin)
+install(TARGETS compute_ma compute_normals simplify streaming_mat_simplification DESTINATION bin)
