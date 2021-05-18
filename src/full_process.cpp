@@ -61,22 +61,15 @@ void simplifyData(full_parameters input_parameters, PointList &coords, ma_data m
         for (int i2 = i; i2 < coords.size(); i2++) {
             if (i != i2 && coords[i][0] == coords[i2][0] && coords[i][1] == coords[i2][1] && coords[i][2] == coords[i2][2]) {
                 duplicates.push_back(i2);
-                std::cerr << "Found duplicate: " << i << " == " << i2 << std::endl;
             }
         }
     }
-
-    std::cerr << "Found all duplicates! " << duplicates.size() << std::endl;
-
-    std::cerr << "Coords size before erasing: " << coords.size() << std::endl;
 
     std::reverse(duplicates.begin(), duplicates.end());
 
     for (auto index : duplicates) {
         coords.erase(coords.begin() + index);
     }
-
-    std::cerr << "Erased duplicates! Coords size now: " << coords.size() << std::endl;
 
     madata.m = coords.size();
 
@@ -88,8 +81,6 @@ void simplifyData(full_parameters input_parameters, PointList &coords, ma_data m
     // Stage 1: Compute the normals of all points currently in memory
     compute_normals(input_parameters, madata);
 
-    std::cerr << "Computed normals" << std::endl;
-
     // Storage space for our results:
     PointList ma_coords(2 * madata.m);
 
@@ -99,24 +90,19 @@ void simplifyData(full_parameters input_parameters, PointList &coords, ma_data m
     // Stage 2: Compute the MASB
     compute_masb_points(input_parameters, madata);
 
-    std::cerr << "Computed MASB" << std::endl;
-
     madata.lfs = new float[madata.m];
     madata.mask = new bool[madata.m];
 
     // Stage 3: Simplify the LFS of the points
     simplify_lfs(input_parameters, madata);
 
-    std::cerr << "Simplified LFS" << std::endl;
-
     // Stage 4: Release points remaining after simplification to stdout
     for (int i = 0; i < madata.m; i++) {
         if (madata.mask[i]) {
-            std::cout << "v " << std::setprecision(9) << coords[i][0] + offset[0] << " " << coords[i][1] + offset[1] << " " << std::setprecision(4) << coords[i][2] + offset[2] << std::endl;
+            std::cout << "v " << std::setprecision(9) << coords[i][0] + offset[0] << " " << coords[i][1] + offset[1]
+                      << " " << std::setprecision(4) << coords[i][2] + offset[2] << std::endl;
         }
     }
-
-    std::cerr << "Output complete" << std::endl;
 
     // Free memory
     delete[] madata.mask;
@@ -181,20 +167,16 @@ int main(int argc, char **argv) {
         if (fake3dArg.isSet())
             input_parameters.dimension = 2;
 
-        bool sprinkling = true;
         float offset[3];
 
         PointList coords;
         ma_data madata;
 
         for (std::string line; std::getline(std::cin, line);) {
+
             std::vector<std::string> splitLine = split(line, " ");
 
-            // All sprinkle points have passed, so can safely start simplifying
-            if (splitLine[0] == "#" && splitLine[1] == "endsprinkle") {
-                sprinkling = false;
-
-            } else if (splitLine[0] == "b") {
+            if (splitLine[0] == "b") {
                 float minX = std::stof(splitLine[1]);
                 float minY = std::stof(splitLine[2]);
 
@@ -208,9 +190,7 @@ int main(int argc, char **argv) {
                 offset[1] = minY + (maxY - minY) / 2;
                 offset[2] = minZ + (maxZ - minZ) / 2;
 
-                std::cout << line << std::endl;
-
-            } else if (splitLine[0] == "v" && !sprinkling) {
+            } else if (splitLine[0] == "v") {
 
                 float x = std::stof(splitLine[1]);
                 float y = std::stof(splitLine[2]);
@@ -225,28 +205,12 @@ int main(int argc, char **argv) {
                 coords.push_back(newPoint);
                 madata.bbox.addPoint(newPoint);
 
-            } else if (splitLine[0] == "x") {
-
-                if (!coords.empty()) {
-                    simplifyData(input_parameters, coords, madata, offset);
-
-                    // Reset coords and bbox
-                    coords.resize(0);
-                    madata.bbox = Box();
-                }
-
-                std::cout << line << std::endl;
-
-            }  else {
-                std::cout << line << std::endl;
             }
 
         }
 
-        // Process remaining points, if any
-        if (!coords.empty()) {
-            simplifyData(input_parameters, coords, madata, offset);
-        }
+        // Process points
+        simplifyData(input_parameters, coords, madata, offset);
 
     } catch (TCLAP::ArgException &e) { std::cerr << "Error: " << e.error() << " for " << e.argId() << std::endl; }
 
